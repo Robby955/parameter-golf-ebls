@@ -71,19 +71,22 @@ Built on the established competitive baseline from the challenge:
 - Gamma convergence is robust and consistent across runs, confirming the Bayesian sharing pattern.
 - EBLS frees ~50% of parameters from duplicated storage, enabling the wider model within the same byte budget.
 
-### What Doesn't Work (Yet)
+### Current Status
 
-- **Quantization gap (+0.134 BPB)**: The post-quant score (1.3441) is worse than the baseline. With only 4572 steps, QAT hasn't converged enough to close the int6 quantization gap. The wider model also has more parameters to quantize, amplifying per-weight error.
-- **Step time (131ms vs ~43ms baseline)**: The 1024-dim model runs 3× slower than 512-dim, yielding only 4572 steps in 10 minutes. This is the fundamental tradeoff — width vs. training steps.
-- **Artifact slightly over 16MB**: 16.22MB total (225KB over). Fixable by reducing BigramHash buckets or model dimension.
+Pre-quantization BPB beats the baseline, but the 1024-dim model is too wide for the 10-minute budget: only 4572 training steps (vs 13,780 baseline) and a 16.22MB artifact (225KB over limit). The next run addresses both by reducing to 768-dim, which halves step time and fits under 16MB.
 
 ### Path Forward
 
-1. **Reduce to 768-dim** (~80ms/step → ~7500 steps in 10 min, fits under 16MB)
-2. **seq_len=2048** (free ~0.02 BPB improvement)
-3. **Mixed int5/int6 quantization** for MLP weights (saves ~1.86MB, funds a 10th layer)
-4. **Sliding window eval** at stride=64 (already implemented, not yet tested on 8×H100)
-5. **Orthogonal initialization** with muP-scaled output projections
+| Change | Expected Impact | Status |
+|---|---|---|
+| Train + eval at seq_len=2048, batch=786K | ~0.02 BPB from longer context | Implemented |
+| Mixed int5/int6 (int5 for MLP weights) | Saves ~1.86MB → funds extra layer | Implemented |
+| Magnitude pruning (3%) before compression | Better zstd compression on zeros | Implemented |
+| Orthogonal init | Better gradient flow at init | Implemented |
+| Sliding window eval always-on (stride=64) | More accurate BPB measurement | Implemented |
+| Dimension test: 512-dim×12L vs 768-dim×9L | Determine optimal width/depth tradeoff | Testing |
+
+Target: **1.16–1.19 BPB post-quant** on 8×H100.
 
 ## Reproducing
 
@@ -130,20 +133,6 @@ Input tokens
     │
     ▼
   RMSNorm → tied embedding logits → softcap(30)
-```
-
-## Citation
-
-If you find the EBLS approach useful:
-
-```bibtex
-@misc{sneiderman2026ebls,
-  title={Empirical Bayes Layer Sharing for Tiny Language Models},
-  author={Sneiderman, Robby},
-  year={2026},
-  howpublished={\url{https://github.com/Robby955/parameter-golf-ebls}},
-  note={OpenAI Parameter Golf Challenge entry}
-}
 ```
 
 ## License
